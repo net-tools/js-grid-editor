@@ -1,0 +1,25 @@
+{
+    "name" : "net-tools/js-grid-editor",
+	
+    "description" : "Javascript API implementing a grid editor",
+	
+	"type": "library",
+	
+	"require" : {
+		"net-tools/js-core": "^1.0.0"
+    },
+	
+	"autoload": {
+    },
+	 
+    "license" : "MIT",
+
+    "authors": [
+        {
+            "name": "Pierre",
+            "email": "dev@nettools.ovh",
+            "role": "Developer"
+        }
+    ]
+
+}
