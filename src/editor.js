@@ -733,7 +733,7 @@ nettools.jsGridEditor = class {
 
 		// fire onchange event for this row
 		var that = this;
-		this.editor.fireOnRowChange(row, this.editor.options.data[row]).then(
+		this.editor.fireOnRowChange(row, dataclone).then(
 			function(row)
 			{
 				that.editor.options.data[row][that.columnId] = that.checked ? 1 : 0;
