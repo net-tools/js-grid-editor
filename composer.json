@@ -6,7 +6,8 @@
 	"type": "library",
 	
 	"require" : {
-		"net-tools/js-core": "^1.0.0"
+		"net-tools/js-core": "^1.0.0",
+        "net-tools/ui": "^1.0.0"
     },
 	
 	"autoload": {

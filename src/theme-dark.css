@@ -1,0 +1,15 @@
+table.jsGridEditor {
+	--jsGridEditorDarkColor: unset; 		
+	--jsGridEditorBorderColor: var(--ui-borderColor, lightgray);
+	--jsGridEditorEvenRows: var(--ui-themeBgColor, whitesmoke);
+}
+
+
+table.jsGridEditor td,
+table.jsGridEditor th{
+	border-right-color: #0c2c55;
+}
+
+table.jsGridEditor th span {
+	color:steelblue;
+}

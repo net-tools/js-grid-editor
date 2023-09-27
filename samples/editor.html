@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Editor test</title>
+	
+<script src="../../js-core/src/js-core.js"></script>
+<script src="../src/editor.js"></script>
+<script src="sample.js"></script>
+<link rel="stylesheet" href="../../ui/src/ui.css">
+<link rel="stylesheet" href="../../ui/src/ui.yellow-theme.css" id="colorStyle">
+<link rel="stylesheet" href="../src/editor.css">
+<link rel="stylesheet" href="../src/theme-neutral.css" id="gridEditorColorStyle">
+
+<style>
+    body{
+        font-family: "Gill Sans", "Gill Sans MT", "Myriad Pro", "DejaVu Sans Condensed", Helvetica, Arial, "sans-serif"
+    }    
+</style>    
+    
+</head>
+
+<body>
+<h1>JS grid editor test</h1>
+<hr>
+
+Color theme : <select onChange="sample.colorChange(this);" id="colorSelect">
+</select>
+-
+Dark theme : <select name="darkTheme" onChange="sample.darkTheme(this);" id="darkThemeSelect">
+	<option selected value="0">No</option>
+	<option value="1">Yes</option>
+</select>
+
+<hr>
+
+<a href="javascript:void(0)" onclick="grid.setData(d); return false;">Replace data</a>
+<hr>	
+<div id="grid"></div>
+	
+<script>
+	
+	
+var d = [];
+	
+for ( var i = 0 ; i < 1000 ; i++ )
+{
+	var o = { 
+		key : 'F' + Math.floor(Math.random() * 10), 
+		country : 'France' + Math.floor(Math.random() * 100), 
+		region : 'Europe', 
+		order : Math.floor(Math.random() * 1000), 
+		english : Math.floor(Math.random() * 2)
+	};
+	
+	d.push(o);
+}
+	
+	
+
+var grid = new nettools.jsGridEditor(document.getElementById('grid'),
+	{
+		columns : [ 
+			{ id : 'key', subTitle:'string(2)', format:/^[A-Z][A-Z0-9]$/, required : true, validator:function(v){ return v!='RU'; } },
+			{ id : 'country', title : 'Country name', subTitle:'string', readonly : true }, 
+			{ id : 'region', title : 'World area',  subTitle:'list', required : true, type:'list', datalist:['Europe', 'America', 'North-America', 'South-America', 'Asia', 'Africa'] },
+			{ id : 'order', type : 'int', subTitle:'int'  },
+            { id : 'english', title : 'Speak English ?',  subTitle:'bool(0/1)', required : true, type : 'bool' }
+		],
+		data : [
+			{ key : 'FR', country : 'France', region : 'Europe', order : 1, english : 0 },
+			{ key : 'US', country : 'USA', region : 'North-America', order : 2, english : 1 },
+			{ key : 'UK', country : 'United Kingdom', region : 'Europe', order : 3, english : 1 }
+		],
+		editable : true,
+		rowToStringColumns : 1,
+		defaultValues : {
+			region : 'Asia',
+			english : 1
+		},
+		onRowValidate : function(row, values)
+			{
+				console.log('Values to validate at row ' + row);
+				console.log(values);
+				return true;
+			},
+		onRowChange : function(row, values)
+			{
+				console.log('Row changed at offset ' + row);
+				console.log(values);
+				
+				if ( row % 2 == 0 )
+					return Promise.resolve(row);
+				else
+					return Promise.reject('Row commit failed at row ' + row);
+			},
+		/*onRowToString : function(row, values)
+			{
+				var ret = [];
+				for ( var k in values )
+					ret.push(`${k} = ${values[k]}`);
+				
+				return ret.join('\n');
+			},*/
+		onRowDelete : function(row, values)
+			{
+				return new Promise(function(resolve, reject){
+					if ( confirm('Confirm deletion has been processed client-side ?') )
+						resolve(row);
+					else
+						reject('Deletion at row ' + row + ' denied');
+				});
+			},
+		onRowInsert : function(row, values)
+			{
+					return new Promise(function(resolve, reject){
+						if ( confirm('Confirm insert has been processed client-side ?') )
+							resolve(row);
+						else
+							reject('Insert at row ' + row + ' denied');
+					});
+			}
+	}
+);
+	
+</script>
+</body>
+</html>
