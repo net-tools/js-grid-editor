@@ -555,6 +555,8 @@ nettools.jsGridEditor = class {
 		for ( var i = reservedCols ; i < tdsl ; i++ )
 			if ( !(this.options.columns[i-reservedCols].readonly || (!newline && this.options.columns[i-reservedCols].readonlyEdit)) )
 				tds[i].contentEditable = editable;
+			else
+				tds[i].contentEditable = false;
 
 
 		// reset td content for row ; may remove checkboxes for bool values (for contentEditable = true) or add checkboxes (for contentEditable = false)
