@@ -142,4 +142,5 @@ table.jsGridEditor tr[data-edit] td {
 
 table.jsGridEditor tr[data-edit] td[contenteditable="false"] {					/* line with column not editable */
 	background-color: #00000033;
+	cursor: not-allowed;
 }	
