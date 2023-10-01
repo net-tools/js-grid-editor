@@ -35,6 +35,7 @@ nettools.jsGridEditor = class {
 	 *					required : bool,					1 or 0											Is the column value mandatory ?
 	 *					format : string|RegExp,				ex. /^0[67][0-9]{8}$/ or '^0[67][0-9]{8}$'		Custom format to validate with
 	 *					readonly : bool,					1 or 0                                          If set to true, this column can't be modified, even if table is editable
+	 *					readonlyEdit : bool,				1 or 0											If set to true, this column is readonly when editing, but it can be set when inserting a new line
 	 * 					datalist : string[]					ex. ['on', 'off', 'unknown']					If type = 'list', defines the accepted values
 	 *					validator : function(string):bool													Check column value with user callback returning true(ok) or false(rejected value)
 	 *				}
@@ -535,9 +536,10 @@ nettools.jsGridEditor = class {
 	 * Set contentEditable property of cells in a row
 	 *
 	 * @param int row 0-index of row to set edit mode on or off
-	 * @param bool editable
+	 * @param bool editable Is row in edit mode ?
+	 * @param bool newline Is row a newline ; if so, columns with `readonlyEdit` option are editable
 	 */
-	setRowContentEditable(row, editable)
+	setRowContentEditable(row, editable, newline = false)
 	{
 		// get TR at offset row+1 (+1 since we have header line and +1 since rows are indexed beginning at 1 when using nth-child)
 		var tr = this.node.querySelector(`tr:nth-of-type(${row+2})`);
@@ -551,7 +553,7 @@ nettools.jsGridEditor = class {
 		var reservedCols = this.getReservedColumnsCount();
 
 		for ( var i = reservedCols ; i < tdsl ; i++ )
-			if ( !this.options.columns[i-reservedCols].readonly )
+			if ( !(this.options.columns[i-reservedCols].readonly || (!newline && this.options.columns[i-reservedCols].readonlyEdit)) )
 				tds[i].contentEditable = editable;
 
 
@@ -1119,8 +1121,8 @@ nettools.jsGridEditor = class {
 									div.parentNode.removeChild(div);
 
 
-									// removing contentEditable
-									that.setRowContentEditable(row, false);
+									// removing contentEditable for inserted line
+									that.setRowContentEditable(row, false, true);
 
 									// removing insert mode from table (thus removing css filter on other lines)
 									tr.parentNode.removeAttribute('data-insert');
