@@ -45,6 +45,7 @@ nettools.jsGridEditor = class {
 	 *			]
 	 * - data : object[] ; an array of object litterals for table content. ex. [ { col1 : string('col1 row1 value'), col2 : string('col2 row1 value') }, {...} ]
 	 * - editable : bool (are table rows editable ?)
+	 * - disableDblClick : bool ; is double-click on a row (to edit the row) disabled ? Default value is 'false'
 	 * - defaultValues : object ; an object litteral containing default values for new lines
 	 * - dialog : nettools.jsGridEditor.Dialog ; an object inheriting from nettools.jsGridEditor.Dialog with `alert` and `confirm` methods ; by default, Javasript `alert` and `confirm` functions are used
 	 * - rowToStringColumns : int|'first'|'all' : default onRowToString event implements row to string convert by returning a single column key=value string (the column key is given by 'first' or an int, 0 being the first value), or a string with all row columns key1=value1, key2=value2, ... (default behavior)
@@ -160,6 +161,11 @@ nettools.jsGridEditor = class {
 
 		this.options.rowToStringColumns = this.options.rowToStringColumns || 'all';	
 		this.options.rowToStringColumns = (this.options.rowToStringColumns == 'first') ? 0 : this.options.rowToStringColumns;
+		
+		
+		// dbl click not disabled
+		if ( this.options.disableDblClick === undefined )
+			this.options.disableDblClick = false;
 
 		
 		this.options.onGetCellHtmlValue = (this.options.onGetCellHtmlValue || function(row, column, td){ return this.options.data[row][column]; }).bind(this);
@@ -402,6 +408,7 @@ nettools.jsGridEditor = class {
 	output()
 	{
 		var table = document.createElement('table');
+		table.editor = this;
 
 
 		// output headers
@@ -833,6 +840,26 @@ nettools.jsGridEditor = class {
 		else
 			return true;
 	}
+	
+	
+	
+	/**
+	 * React to double-click on cell ; 'this' refers to TD element
+	 */
+	dblClick()
+	{
+		var eventTarget = this;
+		
+		while ( eventTarget && eventTarget.nodeName != 'TABLE' )
+			eventTarget = eventTarget.parentNode;
+
+		if ( !eventTarget )
+			throw new Error('Can\'t find TABLE parent node up the DOM tree');
+
+		
+		// now eventTarget refers to TABLE element			
+		eventTarget.editor.editRow(eventTarget.editor.getTRNode(this).row);
+	}
 
 
 
@@ -864,6 +891,10 @@ nettools.jsGridEditor = class {
 			td.innerText = (value === undefined) ? '' : value;
         
         
+		// set event for dbl click
+		if ( !this.options.disableDblClick )
+			td.addEventListener('dblclick', this.dblClick);
+		
         
         // if hidden column
         if ( columnDef.hidden )
