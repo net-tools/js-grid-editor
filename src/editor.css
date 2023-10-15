@@ -50,7 +50,7 @@ table.jsGridEditor td,
 table.jsGridEditor th{
 	border-right: 1px solid var(--jsGridEditorBorderColor);
 	border-bottom: 1px solid var(--jsGridEditorBorderColor);
-	padding: 0.55em;
+	padding: 0.5em;
 }
 
 table.jsGridEditor tr td:first-child {

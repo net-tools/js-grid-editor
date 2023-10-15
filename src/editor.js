@@ -31,8 +31,9 @@ nettools.jsGridEditor = class {
 	 * 					id : string,						ex. 'col1'										Column ID
 	 *					title : string,						ex. 'Column n1'									Title that will appear in table header
 	 *					subTitle : string,					ex. 'Currency:$'								Subtitle that will appear in table header
-	 *					type : string,						ex. string|int|float|bool|list					Data type of each column
+	 *					type : string,						ex. string|int|float|bool|list|html				Data type of each column
 	 *					required : bool,					1 or 0											Is the column value mandatory ?
+     *                  hidden : bool                       1 or 0                                          Is the column hidden ?
 	 *					format : string|RegExp,				ex. /^0[67][0-9]{8}$/ or '^0[67][0-9]{8}$'		Custom format to validate with
 	 *					readonly : bool,					1 or 0                                          If set to true, this column can't be modified, even if table is editable
 	 *					readonlyEdit : bool,				1 or 0											If set to true, this column is readonly when editing, but it can be set when inserting a new line
@@ -47,11 +48,13 @@ nettools.jsGridEditor = class {
 	 * - defaultValues : object ; an object litteral containing default values for new lines
 	 * - dialog : nettools.jsGridEditor.Dialog ; an object inheriting from nettools.jsGridEditor.Dialog with `alert` and `confirm` methods ; by default, Javasript `alert` and `confirm` functions are used
 	 * - rowToStringColumns : int|'first'|'all' : default onRowToString event implements row to string convert by returning a single column key=value string (the column key is given by 'first' or an int, 0 being the first value), or a string with all row columns key1=value1, key2=value2, ... (default behavior)
-	 * - onRowValidate : function(int rowNumber, object rowData):bool ; called to accept or deny row updates (rowData may be updated during call) ; return true to accept, false to deny updates
+	 * - onRowValidate : function(int rowNumber, object rowData):Promise ; called to accept or deny row updates (rowData may be updated during call) ; return a resolved Promise to accept changes, or a rejected Promise with error message to reject updates
 	 * - onRowChange : function(int rowNumber, object rowData):Promise ; called to notify that a row content has changed
 	 * - onRowToString : function(int rowNumber, object rowData):string ; called to get a string value for a row
 	 * - onRowDelete : function(int rowNumber, object rowData):Promise ; called to notify the client the row has been deleted, returning a Promise when done ; the Promise is resolved with rowNumber
 	 * - onRowInsert : function(int rowNumber, object rowData):Promise ; called to notify that a row has been inserted at offset rowNumber (usually 0), returning a Promise when done ; the Promise is resolved with rowNumber
+	 * - onCellHtml : function(bool editing, int rowNumber, string columnId, string value,  HTMLTableCellElement td) ; called for 'html' columns to set some rich GUI inside TD node
+	 * - onGetCellHtmlValue : function(int rowNumber, string columnId, HTMLTableCellElement td):string ; called for 'html' columns in edit-mode to get value to store in dataset when committing row edits
 	 */
 	constructor(node, options)
 	{
@@ -61,7 +64,7 @@ nettools.jsGridEditor = class {
 
 		// normalize parameters
 		this.setDefaultValues();
-
+        
 		// check parameters
 		this.checkParameters();
 
@@ -158,7 +161,10 @@ nettools.jsGridEditor = class {
 		this.options.rowToStringColumns = this.options.rowToStringColumns || 'all';	
 		this.options.rowToStringColumns = (this.options.rowToStringColumns == 'first') ? 0 : this.options.rowToStringColumns;
 
-		this.options.onRowValidate = (this.options.onRowValidate || function(row, data){ return true; }).bind(this);
+		
+		this.options.onGetCellHtmlValue = (this.options.onGetCellHtmlValue || function(row, column, td){ return this.options.data[row][column]; }).bind(this);
+		this.options.onCellHtml = (this.options.onCellHtml || function(editing, row, id, value, td){ td.innerHTML = value; }).bind(this);
+		this.options.onRowValidate = (this.options.onRowValidate || function(row, data){ return Promise.resolve(); }).bind(this);
 		this.options.onRowChange = (this.options.onRowChange || function(row, data){ return Promise.resolve(row); }).bind(this);
 		this.options.onRowInsert = (this.options.onRowInsert || function(row, data){ return Promise.resolve(row); }).bind(this);
 		this.options.onRowDelete = (this.options.onRowDelete || function(row, data){ return Promise.resolve(row); }).bind(this);
@@ -289,10 +295,16 @@ nettools.jsGridEditor = class {
 
 		for ( var i = 0 ; i < this.options.columns.length ; i++ )
 		{
+            if ( this.options.columns[i].hidden )
+                var hidden = ' style="display:none;"';
+            else 
+                var hidden = '';
+            
+            
 			if ( this.options.columns[i].subTitle )
-				tmp += `<th data-column='${this.options.columns[i].title}'>${this.options.columns[i].title}<span>${this.options.columns[i].subTitle}</span></th>`;
+				tmp += `<th ${hidden} data-column='${this.options.columns[i].title}'>${this.options.columns[i].title}<span>${this.options.columns[i].subTitle}</span></th>`;
 			else
-				tmp += "<th>" + this.options.columns[i].title + "</th>";
+				tmp += `<th ${hidden}>` + this.options.columns[i].title + "</th>";
 		}
 
 		tr.innerHTML = tmp; 
@@ -473,9 +485,9 @@ nettools.jsGridEditor = class {
 	/**
 	 * Fire a onRowValidate event when row edits must be validated
 	 *
-	 * @param int row 0-index row offset or -1 if new inserted row being validated
+	 * @param int row 0-index row offset or undefined if new inserted row being validated
 	 * @param object values Row values as an object litteral from contentEditable cells
-	 * @return bool Must return true is validation is ok, false otherwise (in that case, updates are reverted)
+	 * @return Promise Returns a resolved Promise if validation ok, or a rejected Promise with error message if validation fails
 	 */
 	fireOnRowValidate(row, values)
 	{
@@ -553,7 +565,7 @@ nettools.jsGridEditor = class {
 		var reservedCols = this.getReservedColumnsCount();
 
 		for ( var i = reservedCols ; i < tdsl ; i++ )
-			if ( !(this.options.columns[i-reservedCols].readonly || (!newline && this.options.columns[i-reservedCols].readonlyEdit)) )
+			if ( !((this.options.columns[i-reservedCols].type == 'list') || this.options.columns[i-reservedCols].readonly || (!newline && this.options.columns[i-reservedCols].readonlyEdit)) )
 				tds[i].contentEditable = editable;
 			else
 				tds[i].contentEditable = false;
@@ -583,6 +595,11 @@ nettools.jsGridEditor = class {
 	{
 		if ( !this.options.editable )
 			throw new Error('Table config prevents editing (set `editable` option to `true`)');
+		
+		
+		// no insert allowed if already one row insert
+		if ( this.isInserting() )
+			return;
 
 
 		// get line template
@@ -591,6 +608,7 @@ nettools.jsGridEditor = class {
 		tr.innerHTML = line;
 
 
+		
 		// output stuff to reserved columns
 		this.setRowReservedColumnsContent(tr, true);
 
@@ -601,9 +619,20 @@ nettools.jsGridEditor = class {
 		var reservedCols = this.getReservedColumnsCount();
 
 		for ( var i = reservedCols ; i < tdsl ; i++ )
-			if ( !this.options.columns[i-reservedCols].readonly )
+        {
+            // if readonly
+			if ( (this.options.columns[i-reservedCols].type != 'list') && !this.options.columns[i-reservedCols].readonly )
 				tds[i].contentEditable = true;
+            else
+				tds[i].contentEditable = false;
 
+            
+            
+            // if hidden
+			if ( this.options.columns[i-reservedCols].hidden )
+                tds[i].style.display = "none";
+        }
+        
 
 		// set default values for inserted row
 		if ( !defaultValues )
@@ -632,19 +661,38 @@ nettools.jsGridEditor = class {
 	 */
 	editRow(row)
 	{
-		if ( !this.options.editable )
-			throw new Error('Table config prevents editing (set `editable` option to `true`)');
+		try
+		{
+			if ( !this.options.editable )
+				throw new Error('Table config prevents editing (set `editable` option to `true`)');
 
-		if ( typeof(row) != 'number' )
-			throw new Error('`row` parameter is not an int value');
+			if ( typeof(row) != 'number' )
+				throw new Error('`row` parameter is not an int value');
 
-		// can't edit when a row is inserted
-		if ( this.isInserting() )
-			return false;
+			// can't edit when a row is inserted
+			if ( this.isInserting() )
+				return false;
 
 
-		// set contentEditable property of each row cell
-		this.setRowContentEditable(row, true);
+			// set contentEditable property of each row cell
+			try
+			{
+				this.setRowContentEditable(row, true);
+			}
+			catch ( e )
+			{
+				// if error, reverting edit mode
+				if ( e instanceof Error )
+					this.setRowContentEditable(row, false);
+				
+				throw e;
+			}
+		}
+		catch ( e ) 
+		{
+			// alert window
+			this.options.dialog.alert(e.message ? e.message : e);
+		}
 	}
 
 
@@ -652,13 +700,13 @@ nettools.jsGridEditor = class {
 	/**
 	 * Get editable row content as object litteral
 	 *
-	 * @param int row 0-index of row to accept updates and stop edit mode
+	 * @param int row 0-index of row to accept updates and stop edit mode ; undefined if inserting row
 	 * @return object Returns an object litteral with column ids as properties and cell content as values
 	 */
 	getEditableRowValues(row)
 	{
 		// get TR at offset row+1 (+1 since we have header line and +1 since rows are indexed beginning at 1 when using nth-child)
-		var tr = this.node.querySelector(`tr:nth-of-type(${row+2})`);
+		var tr = this.node.querySelector(`tr:nth-of-type(${((row===undefined)?0:row)+2})`);
 		if ( !tr )
 			throw new Error(`TR at offset ${row} not found`);
 
@@ -671,6 +719,10 @@ nettools.jsGridEditor = class {
 		for ( var i = reservedCols ; i < tdsl ; i++ )
 			switch ( this.options.columns[i-reservedCols].type )
 			{
+				case 'html':
+					values[this.options.columns[i-reservedCols].id] = this.fireOnGetCellHtmlValue(row, this.options.columns[i-reservedCols].id, tds[i]);
+					break;
+					
 				case 'list':
 					values[this.options.columns[i-reservedCols].id] = tds[i].querySelector('select').value;
 					break;
@@ -696,19 +748,25 @@ nettools.jsGridEditor = class {
 	 * @param object values The object litteral returned by `getEditableRowValues` with string values
 	 * @return object Returns an object litteral with values converted to columns types
 	 */
-	getTypedRowValues(row)
+	getTypedRowValues(values)
 	{
 		for ( var i = 0 ; i < this.options.columns.length ; i++ )
 			switch ( this.options.columns[i].type )
 			{
 				case 'int':
 				case 'bool':
-					row[this.options.columns[i].id] = parseInt(row[this.options.columns[i].id]);
+                    if ( values[this.options.columns[i].id] == '' )
+                        values[this.options.columns[i].id] = '0';
+                    
+					values[this.options.columns[i].id] = parseInt(values[this.options.columns[i].id]);
 					break;
 
 				case 'float':
 				case 'number':
-					row[this.options.columns[i].id] = parseFloat(row[this.options.columns[i].id]);
+                    if ( values[this.options.columns[i].id] == '' )
+                        values[this.options.columns[i].id] = '0.0';
+
+                    values[this.options.columns[i].id] = parseFloat(values[this.options.columns[i].id]);
 					break;
 
 				default:
@@ -717,7 +775,7 @@ nettools.jsGridEditor = class {
 			}
 
 
-		return row;
+		return values;
 	}
 
 
@@ -752,7 +810,7 @@ nettools.jsGridEditor = class {
 				{
 					// revert checkbox status
 					that.checked = !that.checked;
-					that.options.dialog.alert(e.message ? e.message : e);
+					that.editor.options.dialog.alert(e.message ? e.message : e);
 				}
 			);
 	}
@@ -782,7 +840,7 @@ nettools.jsGridEditor = class {
 	 * Set column content, maybe decorated with some HTML (ex. checkbox for bool values)
 	 *
 	 * @param int row 0-index of row to put content into 
-	 * @param HTMLTableCellElement TD node to put content into
+	 * @param HTMLTableCellElement td TD node to put content into
 	 * @param object columnDef Object litteral from options.columns describing the column
 	 * @param string value Content to display
 	 */
@@ -797,10 +855,52 @@ nettools.jsGridEditor = class {
 			cb.onclick = this.boolCheckboxClick;
 			cb.onchange = this.boolCheckboxChange;
 		}
+		else if ( columnDef.type == 'html' )
+		{
+			td.innerHTML = '';
+			this.fireOnCellHtml(false, row, columnDef.id, value, td);
+		}
 		else
 			td.innerText = (value === undefined) ? '' : value;
+        
+        
+        
+        // if hidden column
+        if ( columnDef.hidden )
+            td.style.display = "none";
 	}
 
+	
+
+	/**
+	 * Fire onCellHtml event to get HTML content for a cell whose column has 'html' type
+	 *
+     * @param bool editing Is row in edit mode ?
+	 * @param int row 0-index of row that the TD belongs to
+	 * @param string column Column name
+	 * @param string value Cell content as stored in dataset
+	 * @param HTMLTableCellElement td TD node to put content into
+	 */
+	fireOnCellHtml(editing, row, column, value, td)
+	{
+		this.options.onCellHtml(editing, row, column, value, td);
+	}
+	
+
+
+	/**
+	 * Fire onGetCellHtmlValue event to get value to store in dataset for column with 'html' type
+	 *
+	 * @param int row 0-index of row that the TD belongs to
+	 * @param string column Column name
+	 * @param HTMLTableCellElement td TD node to read content from
+	 * @return string
+	 */
+	fireOnGetCellHtmlValue(row, column, td)
+	{
+		return this.options.onGetCellHtmlValue(row, column, td);
+	}
+	
 
 
 	/**
@@ -824,17 +924,22 @@ nettools.jsGridEditor = class {
 	/**
 	 * Set an editable column value
 	 *
-	 * @param HTMLTableCellElement TD node to put editable value into
+	 * @param int row 0-index of row that the TD belongs to
+	 * @param HTMLTableCellElement td TD node to put editable value into
 	 * @param object columnDef Object litteral from options.columns describing the column
 	 * @param string value Content to edit
 	 */
-	setRowEditableColumn(td, columnDef, value)
+	setRowEditableColumn(row, td, columnDef, value)
 	{
 		// render an editable column with appropriate stuff ; type 'list' columns have a choice list to pick values from
 		switch ( columnDef.type )
 		{
+			case 'html':
+				this.fireOnCellHtml(true, row, columnDef.id, value, td);
+				break;
+				
 			case 'list':
-				td.innerHTML = `<select><option></option>${columnDef.datalist.map(x => `<option ${(x == value)?'selected':''}>${x}</option>`).join()}</select>`;
+				td.innerHTML = `<select><option></option>${columnDef.datalist.map(x => `<option ${(x == value)?'selected':''}>${x}</option>`).join('')}</select>`;
 				break;
 
 			default:
@@ -857,7 +962,7 @@ nettools.jsGridEditor = class {
 		var tdsl = tds.length;
 		var reservedCols = this.getReservedColumnsCount();
 		for ( var i = reservedCols ; i < tdsl ; i++ )
-			this.setRowEditableColumn(tds[i], this.options.columns[i-reservedCols], values[this.options.columns[i-reservedCols].id]);
+			this.setRowEditableColumn(tr.row, tds[i], this.options.columns[i-reservedCols], values[this.options.columns[i-reservedCols].id]);
 	}
 
 
@@ -952,44 +1057,44 @@ nettools.jsGridEditor = class {
 
 
 		// ask for confirm
-		this.confirmRowDeletion(row, this.options.data[row]).then(
-			function(row)
-			{
-				// fire onRowDelete event so that client side can acknowledge row deletion, doing any required adjustments
-				that.fireOnRowDelete(row, that.options.data[row]).then(
-					function(row)
-					{
-						// remove row from dataset, then filter array to remove empty values
-						delete that.options.data[row];
-						that.options.data = that.options.data.filter(x=>true);
-
-
-						// get TR at offset row+1 (+1 since we have header line and +1 since rows are indexed beginning at 1 when using nth-child)
-						var tr = that.node.querySelector(`tr:nth-of-type(${row+2})`);
-						if ( !tr )
-							throw new Error(`TR at offset ${row} not found`);
-
-
-						// update row number after row deleted
-						var next = tr.nextElementSibling;
-						while ( next )
+		this.confirmRowDeletion(row, this.options.data[row])
+			.then(function(row)
+				{
+					// fire onRowDelete event so that client side can acknowledge row deletion, doing any required adjustments
+					that.fireOnRowDelete(row, that.options.data[row]).then(
+						function(row)
 						{
-							if ( next.nodeName == 'TR' )
-								next.row--;
-
-							next = next.nextElementSibling;
-						}
+							// remove row from dataset, then filter array to remove empty values
+							delete that.options.data[row];
+							that.options.data = that.options.data.filter(x=>true);
 
 
-						// delete row in DOM tree
-						tr.parentNode.removeChild(tr);
-					})
-					.catch(function(e)
-						{
-							that.options.dialog.alert(e.message ? e.message : e);
-						}
-					);
-			})
+							// get TR at offset row+1 (+1 since we have header line and +1 since rows are indexed beginning at 1 when using nth-child)
+							var tr = that.node.querySelector(`tr:nth-of-type(${row+2})`);
+							if ( !tr )
+								throw new Error(`TR at offset ${row} not found`);
+
+
+							// update row number after row deleted
+							var next = tr.nextElementSibling;
+							while ( next )
+							{
+								if ( next.nodeName == 'TR' )
+									next.row--;
+
+								next = next.nextElementSibling;
+							}
+
+
+							// delete row in DOM tree
+							tr.parentNode.removeChild(tr);
+						})
+						.catch(function(e)
+							{
+								that.options.dialog.alert(e.message ? e.message : e);
+							}
+						);
+				})
 
 			// doing nothing if row deletion canceled
 			.catch(function(e)
@@ -1023,48 +1128,62 @@ nettools.jsGridEditor = class {
 			return false;
 
 
-		// get editable row content as object litteral
-		var values = this.getEditableRowValues(row);	
+		try
+		{
+			// get editable row content as object litteral
+			var values = this.getEditableRowValues(row);	
 
 
-		// validate row columns with their data type, then validate with global custom event ; values may be corrected during call
-		var that = this;
-		this.validateRow(values)
-			.then(function()
-				{
-					if ( that.fireOnRowValidate(row, that.getTypedRowValues(values)) )
+			// validate row columns with their data type, then validate with global custom event ; values may be corrected during call
+			var that = this;
+			this.validateRow(values)
+				.then(function()
 					{
-						// if update found in editable row
-						if ( that.hasRowChanged(row, values) )
-						{
-							// fire onRowChange event
-							that.fireOnRowChange(row, values).then(
-								function(row)
+						that.fireOnRowValidate(row, that.getTypedRowValues(values))
+							.then(function()
 								{
-									// commit values to internal dataset options.data
-									that.commitRowToDataset(row, values);
-
-									// removing contentEditable
-									that.setRowContentEditable(row, false);
-								})
-								.catch(function(e)
+									// if update found in editable row
+									if ( that.hasRowChanged(row, values) )
 									{
-										that.options.dialog.alert(e.message ? e.message : e);
+										// fire onRowChange event
+										that.fireOnRowChange(row, values).then(
+											function(row)
+											{
+												// commit values to internal dataset options.data
+												that.commitRowToDataset(row, values);
+
+												// removing contentEditable
+												that.setRowContentEditable(row, false);
+											})
+											.catch(function(e)
+												{
+													that.options.dialog.alert(e.message ? e.message : e);
+												}
+											);
 									}
-								);
-						}
-						else
-							// removing contentEditable
-							that.setRowContentEditable(row, false);
+									else
+										// removing contentEditable
+										that.setRowContentEditable(row, false);
+								}
+							)
+							.catch(function(e)
+								{
+									that.options.dialog.alert(e.message ? e.message : e);
+								}
+							);
 					}
-				}
-			)
-			.catch(function(e)
-				{
-					if ( (typeof e == 'object') && (e instanceof Error) )
-						that.options.dialog.alert(e.message);
-				}
-			);
+				)
+				.catch(function(e)
+					{
+						that.options.dialog.alert(e.message ? e.message : e);
+					}
+				);
+		}
+		catch ( e ) 
+		{
+			// alert window
+			this.options.dialog.alert(e.message ? e.message : e);
+		}
 	}
 
 
@@ -1076,74 +1195,87 @@ nettools.jsGridEditor = class {
 	 */
 	endInsertRow()
 	{
-		// get inserted row content as object litteral ; always at offset 0
-		var values = this.getEditableRowValues(0);
+		try
+		{
+			// get inserted row content as object litteral
+			var values = this.getEditableRowValues(undefined);
 
-		var that = this;
+			var that = this;
 
 
-		this.validateRow(values)
-			.then(function()
-				{
-					// validate row columns with their data type, then validate with global custom event ; values may be corrected during call
-					if ( that.fireOnRowValidate(-1, that.getTypedRowValues(values)) )
+			this.validateRow(values)
+				.then(function()
 					{
-						// fire onRowInsert event
-						that.fireOnRowInsert(0, values)
-							.then(function(row)
+						// validate row columns with their data type, then validate with global custom event ; values may be corrected during call
+						that.fireOnRowValidate(undefined, that.getTypedRowValues(values))
+							.then(function()
 								{
-									// commit values to internal dataset options.data, at the array beginning
-									that.options.data.unshift({});
-									that.commitRowToDataset(row, values);
+									// fire onRowInsert event
+									that.fireOnRowInsert(0, values)
+										.then(function(row)
+											{
+												// commit values to internal dataset options.data, at the array beginning
+												that.options.data.unshift({});
+												that.commitRowToDataset(row, values);
 
 
-									// get TR for insert line (line 1 = headers, line 2 = insert line , nth-of-type requires a item number from 1)
-									var tr = that.node.querySelector('tr:nth-of-type(2)');
-									if ( !tr )
-										throw new Error('TR at offset 1 not found');
+												// get TR for insert line (line 1 = headers, line 2 = insert line , nth-of-type requires a item number from 1)
+												var tr = that.node.querySelector('tr:nth-of-type(2)');
+												if ( !tr )
+													throw new Error('TR at offset 1 not found');
 
 
-									// set row index
-									tr.row = 0;
+												// set row index
+												tr.row = 0;
 
 
-									// renumbering row indexes from TR following edit line to the table end
-									var next = tr.nextElementSibling;
-									while ( next )
-									{
-										if ( next.nodeName == 'TR' )
-											next.row++;
+												// renumbering row indexes from TR following edit line to the table end
+												var next = tr.nextElementSibling;
+												while ( next )
+												{
+													if ( next.nodeName == 'TR' )
+														next.row++;
 
-										next = next.nextElementSibling;
-									}
-
-
-									// remove un-necessary buttons
-									var div = tr.querySelector('div.rowInsert');
-									div.parentNode.removeChild(div);
+													next = next.nextElementSibling;
+												}
 
 
-									// removing contentEditable for inserted line
-									that.setRowContentEditable(row, false, true);
+												// remove un-necessary buttons
+												var div = tr.querySelector('div.rowInsert');
+												div.parentNode.removeChild(div);
 
-									// removing insert mode from table (thus removing css filter on other lines)
-									tr.parentNode.removeAttribute('data-insert');
+
+												// removing contentEditable for inserted line
+												that.setRowContentEditable(row, false, true);
+
+												// removing insert mode from table (thus removing css filter on other lines)
+												tr.parentNode.removeAttribute('data-insert');
+											}
+										).catch(function(e)
+											{
+												that.options.dialog.alert(e.message ? e.message : e);
+											}
+										);
 								}
-							).catch(function(e)
+							)
+							.catch(function(e)
 								{
 									that.options.dialog.alert(e.message ? e.message : e);
 								}
-							);
+							);			
 					}
-			
-				}
-			)
-			.catch(function(e)
-				{
-					if ( (typeof e == 'object') && (e instanceof Error) )
-						that.options.dialog.alert(e.message);
-				}
-			);				  
+				)
+				.catch(function(e)
+					{
+						that.options.dialog.alert(e.message ? e.message : e);
+					}
+				);				  		
+		}
+		catch ( e ) 
+		{
+			// alert window
+			this.options.dialog.alert(e.message ? e.message : e);
+		}
 	}
 
 
@@ -1198,7 +1330,7 @@ nettools.jsGridEditor = class {
 	 * Validate row values according to their data type and required flag
 	 *
 	 * @param object values Object litteral of row values
-	 * @return Promise Returns a resolved Promise if all row values comply with columns data types, or a rejected Promise if one column value fails validation
+	 * @return Promise Returns a resolved Promise if all row values comply with columns data types, or a rejected Promise with error message, if one column value fails validation
 	 */
 	validateRow(values)
 	{
@@ -1217,8 +1349,8 @@ nettools.jsGridEditor = class {
 
 					if ( r !== true )
 					{
-						that.options.dialog.alert(r).then(reject);
-						return;
+						reject(r);
+                        return;
 					}
 				}
 
