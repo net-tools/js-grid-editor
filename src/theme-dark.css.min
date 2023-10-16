@@ -1,0 +1,1 @@
+table.jsGridEditor{--jsGridEditorBorderColor:var(--ui-borderColor,slategray);--jsGridEditorDarkColor:var(--jsGridEditorBorderColor);--jsGridEditorEvenRows:var(--ui-themeBgColor,#052751)}table.jsGridEditor td,table.jsGridEditor th{border-right-color:#0c2c55}
