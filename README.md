@@ -17,20 +17,20 @@ To install net-tools/js-grid-editor package, just require it through composer : 
 The `nettools.jsGridEditor` class constructor expects the following parameters :
 - the `HTMLElement` node where the editor must be rendered (usually a DIV)
 - an object litteral with options :
-  + columns : an array of object litterals defining columns (see below)
-  + data : an array of object litterals containing data (see below)
-  + editable : a boolean value ; if set to false, the grid data can't be edited
-  + disableDblClick : a boolean value ; if set to true, a double-click can't switch the row to edit mode
-  + defaultValues : an object litteral containing default values for new lines
-  + dialog : an object inheriting from `nettools.jsGridEditor.Dialog` with `alert` and `confirm` methods ; by default, Javasript `alert` and `confirm` functions are used
-  + rowToStringColumns : an event to help convert column values for a given row to a string ; if a numeric (starting at 0) or 'first' is given, the conversion is a key=value string for the corresponding column. If 'all' is given, the conversion returns all key values separated with commas
-  + onRowValidate : an event called to validate row data before exiting edit mode (rowData may be updated during call) ; return a resolved Promise to accept changes, or a rejected Promise with error message to reject updates
-  + onRowChange : an event called to notify the client that a row content has changed ; the client code must return a resolved Promise if he acknowledges the update, or a rejected Promise otherwise
-  + onRowToString : an event called to get a string value for a row (the default code for this event use `rowToStringColumns` value to generate the string)
-  + onRowDelete : an event called to notify the client that a row has been deleted ; the client code must acknowledge the deletion and return a Promise when done
-  + onRowInsert : an event called to notify the client that a row has been inserted ; the client code must return a Promise when done
-  + onCellHtml : an event called for 'html' columns to set some rich GUI inside TD node
-  + onGetCellHtmlValue : an event called for 'html' columns in edit-mode to get edited value to store in dataset when committing row edits
+  + `columns` : an array of object litterals defining columns (see below)
+  + `data` : an array of object litterals containing data (see below)
+  + `editable` : a boolean value ; if set to false, the grid data can't be edited
+  + `disableDblClick` : a boolean value ; if set to true, a double-click can't switch the row to edit mode
+  + `defaultValues` : an object litteral containing default values for new lines
+  + `dialog` : an object inheriting from `nettools.jsGridEditor.Dialog` with `alert` and `confirm` methods ; by default, Javasript `alert` and `confirm` functions are used
+  + `rowToStringColumns` : an event to help convert column values for a given row to a string ; if a numeric (starting at 0) or 'first' is given, the conversion is a key=value string for the corresponding column. If 'all' is given, the conversion returns all key values separated with commas
+  + `onRowValidate` : an event called to validate row data before exiting edit mode (rowData may be updated during call) ; return a resolved Promise to accept changes, or a rejected Promise with error message to reject updates
+  + `onRowToString` : an event called to get a string value for a row (the default code for this event use `rowToStringColumns` value to generate the string)
+  + `onRowChange` : an event called to notify the client that a row content has changed ; the client code must return a resolved Promise if he acknowledges the update, or a rejected Promise otherwise
+  + `onRowDelete` : an event called to notify the client that a row has been deleted ; the client code must acknowledge the deletion and return a resolved Promise when done, or a rejected Promise if an error occured
+  + `onRowInsert` : an event called to notify the client that a row has been inserted ; the client code must return a Promise when done, or a rejected Promise if an error occured
+  + `onCellHtml` : an event called for 'html' columns to set some rich GUI inside TD node
+  + `onGetCellHtmlValue` : an event called for 'html' columns in edit-mode to get edited value to store in dataset when committing row edits
 
 
 The `columns` object litteral array defines all columns ; the allowed parameters for a column are (also, see sample below) :
@@ -125,6 +125,14 @@ var grid = new nettools.jsGridEditor(document.getElementById('grid'),
 	}
 );
 ```
+
+There are several object methods that can be called :
+- `setData` : if `data` options parameter is not set during constructor call, the data can be assigned to grid editor later by calling `setData` method with an array of object litterals.
+- `isInserting` : returns *true* if the editor is currently inserting a new line
+- `insertRow` : switch the editor to insert mode, filling the empty new line with default values provided
+- `editRow` : edit the row at offset in parameter
+- `deleteRow` : delete the row at offset in parameter ; the user is asked to confirm row deletion ; the `onRowDelete` event is called to notify client-side
+
 
 
 ## Samples
